@@ -259,6 +259,62 @@ def graph_interaction_by_micronutrient(
             plt.show()
 
 
+def anova_by_micronutrient(
+    metrics_df: pd.DataFrame,
+    dv: str = "auc_0_24",
+    out_csv: str | None = None,
+) -> None:
+    try:
+        import statsmodels.api as sm
+        import statsmodels.formula.api as smf
+    except Exception:
+        print("statsmodels is required for two-way ANOVA. Try: pip install statsmodels")
+        return
+
+    micronutrients = [
+        m for m in sorted(metrics_df["micronutrient"].dropna().unique())
+        if normalize_text(m) != ""
+    ]
+    if not micronutrients:
+        print("No micronutrients found for ANOVA.")
+        return
+
+    out_rows: list[dict] = []
+    for micronutrient in micronutrients:
+        sub = metrics_df[metrics_df["micronutrient"] == micronutrient]
+        if sub.empty:
+            continue
+        if sub["bacteria"].nunique() < 2:
+            print(f"\nSkipping ANOVA for {micronutrient}: need >= 2 bacteria levels.")
+            continue
+        if sub["concentration_uM"].nunique() < 2:
+            print(f"\nSkipping ANOVA for {micronutrient}: need >= 2 concentration levels.")
+            continue
+        if len(sub) < 4:
+            print(f"\nSkipping ANOVA for {micronutrient}: not enough rows.")
+            continue
+        formula = f"{dv} ~ C(bacteria) * C(concentration_uM)"
+        model = smf.ols(formula, data=sub).fit()
+        table = sm.stats.anova_lm(model, typ=2)
+        print(f"\nTwo-way ANOVA (bacteria x concentration) for micronutrient: {micronutrient}")
+        print(table.to_string())
+        if out_csv:
+            for term, row in table.iterrows():
+                out_rows.append({
+                    "micronutrient": micronutrient,
+                    "term": term,
+                    "sum_sq": row.get("sum_sq"),
+                    "df": row.get("df"),
+                    "F": row.get("F"),
+                    "PR(>F)": row.get("PR(>F)"),
+                })
+
+    if out_csv:
+        out_df = pd.DataFrame(out_rows, columns=["micronutrient", "term", "sum_sq", "df", "F", "PR(>F)"])
+        out_df.to_csv(out_csv, index=False)
+        print(f"\nWrote ANOVA results: {out_csv}")
+
+
 def graph_3d(curves_df: pd.DataFrame, bacteria: str | None = None, micronutrient: str | None = None) -> None:
     sub = curves_df
     if bacteria:
@@ -426,6 +482,11 @@ def main() -> int:
             error=error_arg,
             save_dir=outdir_arg,
         )
+
+    if "--anova2-micro" in sys.argv:
+        dv_arg = get_arg_value("--dv") or "auc_0_24"
+        out_arg = get_arg_value("--anova2-micro-out")
+        anova_by_micronutrient(metrics_df, dv=dv_arg, out_csv=out_arg)
 
     if "--anova2" in sys.argv:
         dv_arg = get_arg_value("--dv") or "auc_0_24"
