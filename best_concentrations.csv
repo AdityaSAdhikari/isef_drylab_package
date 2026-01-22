@@ -1,0 +1,9 @@
+bacteria,micronutrient,concentration_uM,auc_0_24
+e_coli_k12,Choline,600.0,26.45704335458048
+e_coli_k12,Iron,20.0,27.699499686254157
+e_coli_k12,VitaminB5,100.0,26.425863362116875
+e_coli_k12,VitaminB6,100.0,28.36316812291011
+lactobacillus,Choline,600.0,23.90757887716779
+lactobacillus,Iron,20.0,18.668015573781176
+lactobacillus,VitaminB5,100.0,21.58172100544709
+lactobacillus,VitaminB6,100.0,18.516640439308823
