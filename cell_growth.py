@@ -315,6 +315,55 @@ def anova_by_micronutrient(
         print(f"\nWrote ANOVA results: {out_csv}")
 
 
+def tukey_by_micronutrient(
+    metrics_df: pd.DataFrame,
+    dv: str = "auc_0_24",
+    out_csv: str | None = None,
+) -> None:
+    try:
+        from statsmodels.stats.multicomp import pairwise_tukeyhsd
+    except Exception:
+        print("statsmodels is required for Tukey HSD. Try: pip install statsmodels")
+        return
+
+    micronutrients = [
+        m for m in sorted(metrics_df["micronutrient"].dropna().unique())
+        if normalize_text(m) != ""
+    ]
+    if not micronutrients:
+        print("No micronutrients found for Tukey HSD.")
+        return
+
+    out_rows: list[dict] = []
+    for micronutrient in micronutrients:
+        sub = metrics_df[metrics_df["micronutrient"] == micronutrient]
+        if sub.empty:
+            continue
+        if sub["concentration_uM"].nunique() < 2:
+            print(f"\nSkipping Tukey for {micronutrient}: need >= 2 concentration levels.")
+            continue
+        tukey = pairwise_tukeyhsd(
+            endog=sub[dv],
+            groups=sub["concentration_uM"].astype(str),
+            alpha=0.05,
+        )
+        print(f"\nTukey HSD (concentration) for micronutrient: {micronutrient}")
+        print(tukey.summary().as_text())
+
+        if out_csv:
+            res = pd.DataFrame(
+                tukey._results_table.data[1:],
+                columns=tukey._results_table.data[0],
+            )
+            res.insert(0, "micronutrient", micronutrient)
+            out_rows.append(res)
+
+    if out_csv and out_rows:
+        out_df = pd.concat(out_rows, ignore_index=True)
+        out_df.to_csv(out_csv, index=False)
+        print(f"\nWrote Tukey results: {out_csv}")
+
+
 def graph_3d(curves_df: pd.DataFrame, bacteria: str | None = None, micronutrient: str | None = None) -> None:
     sub = curves_df
     if bacteria:
@@ -487,6 +536,11 @@ def main() -> int:
         dv_arg = get_arg_value("--dv") or "auc_0_24"
         out_arg = get_arg_value("--anova2-micro-out")
         anova_by_micronutrient(metrics_df, dv=dv_arg, out_csv=out_arg)
+
+    if "--tukey-micro" in sys.argv:
+        dv_arg = get_arg_value("--dv") or "auc_0_24"
+        out_arg = get_arg_value("--tukey-micro-out")
+        tukey_by_micronutrient(metrics_df, dv=dv_arg, out_csv=out_arg)
 
     if "--anova2" in sys.argv:
         dv_arg = get_arg_value("--dv") or "auc_0_24"
